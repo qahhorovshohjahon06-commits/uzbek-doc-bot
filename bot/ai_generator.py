@@ -4,11 +4,36 @@ from openai import AsyncOpenAI, APIStatusError, APIConnectionError, Authenticati
 
 logger = logging.getLogger(__name__)
 
-_api_key = os.environ.get("OPENAI_API_KEY", "")
-if not _api_key:
-    logger.error("OPENAI_API_KEY environment variable is not set!")
+MODEL = "llama-3.1-70b-versatile"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
-client = AsyncOpenAI(api_key=_api_key)
+
+# ── Typed exceptions ────────────────────────────────────────────────────────
+
+class QuotaExceededError(Exception):
+    """Groq account quota or rate limit exceeded."""
+
+class InvalidAPIKeyError(Exception):
+    """GROQ_API_KEY is missing or invalid."""
+
+class RateLimitedError(Exception):
+    """Too many requests — temporary rate limit."""
+
+class AIConnectionError(Exception):
+    """Network error reaching Groq."""
+
+
+# ── Client factory (lazy — bot starts even without the key set) ─────────────
+
+def _get_client() -> AsyncOpenAI:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        logger.error("GROQ_API_KEY environment variable is not set!")
+        raise InvalidAPIKeyError("GROQ_API_KEY is not configured")
+    return AsyncOpenAI(api_key=api_key, base_url=GROQ_BASE_URL)
+
+
+# ── Prompts ─────────────────────────────────────────────────────────────────
 
 PROMPTS = {
     "referat": {
@@ -41,7 +66,7 @@ PROMPTS = {
         ),
     },
     "tezis": {
-        "system": "Siz o'zbek tilida ilmiy tezis yozuvchi mutaxassississiz. Barcha matnlar to'liq o'zbek tilida bo'lishi kerak.",
+        "system": "Siz o'zbek tilida ilmiy tezis yozuvchi mutaxasssissiz. Barcha matnlar to'liq o'zbek tilida bo'lishi kerak.",
         "user": lambda topic, pages: (
             f"Mavzu: {topic}\n\n"
             f"O'zbek tilida {pages} sahifalik ilmiy tezis yozing.\n"
@@ -57,7 +82,7 @@ PROMPTS = {
         ),
     },
     "presentation": {
-        "system": "Siz o'zbek tilida taqdimot mazmunini yozuvchi mutaxassississiz. Barcha matnlar o'zbek tilida bo'lishi kerak.",
+        "system": "Siz o'zbek tilida taqdimot mazmunini yozuvchi mutaxasssissiz. Barcha matnlar o'zbek tilida bo'lishi kerak.",
         "user": lambda topic, slides: (
             f"Mavzu: {topic}\n\n"
             f"O'zbek tilida {slides} ta slaydli taqdimot mazmunini yozing.\n"
@@ -75,22 +100,10 @@ PROMPTS = {
 }
 
 
-class QuotaExceededError(Exception):
-    """OpenAI account has run out of credits."""
-
-class InvalidAPIKeyError(Exception):
-    """OpenAI API key is missing or invalid."""
-
-class RateLimitedError(Exception):
-    """OpenAI rate limit hit (too many requests)."""
-
-class AIConnectionError(Exception):
-    """Network error reaching OpenAI."""
-
+# ── Generator ───────────────────────────────────────────────────────────────
 
 async def generate_content(doc_type: str, topic: str, count: int) -> str:
-    if not _api_key:
-        raise InvalidAPIKeyError("OPENAI_API_KEY is not set")
+    client = _get_client()  # raises InvalidAPIKeyError if key missing
 
     prompt_cfg = PROMPTS[doc_type]
     system_msg = prompt_cfg["system"]
@@ -98,7 +111,7 @@ async def generate_content(doc_type: str, topic: str, count: int) -> str:
 
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
@@ -109,23 +122,22 @@ async def generate_content(doc_type: str, topic: str, count: int) -> str:
         return response.choices[0].message.content
 
     except AuthenticationError as e:
-        logger.error(f"OpenAI auth error: {e}")
+        logger.error(f"Groq auth error: {e}")
         raise InvalidAPIKeyError(str(e)) from e
 
     except RateLimitError as e:
-        # 429 can mean either rate-limited or quota exceeded
         msg = str(e).lower()
-        logger.error(f"OpenAI rate/quota error: {e}")
-        if "insufficient_quota" in msg or "exceeded your current quota" in msg:
+        logger.error(f"Groq rate/quota error: {e}")
+        if "insufficient_quota" in msg or "exceeded your current quota" in msg or "rate_limit" in msg:
             raise QuotaExceededError(str(e)) from e
         raise RateLimitedError(str(e)) from e
 
     except APIConnectionError as e:
-        logger.error(f"OpenAI connection error: {e}")
+        logger.error(f"Groq connection error: {e}")
         raise AIConnectionError(str(e)) from e
 
     except APIStatusError as e:
-        logger.error(f"OpenAI API error {e.status_code}: {e}")
+        logger.error(f"Groq API error {e.status_code}: {e}")
         if e.status_code == 429:
             raise QuotaExceededError(str(e)) from e
         raise
