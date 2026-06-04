@@ -3,3 +3,5 @@ openai==1.82.0
 python-docx==1.1.2
 python-pptx==1.0.2
 aiofiles==24.1.0
+# Groq API is accessed via the OpenAI-compatible endpoint (no extra package needed)
+# Set GROQ_API_KEY in your environment
