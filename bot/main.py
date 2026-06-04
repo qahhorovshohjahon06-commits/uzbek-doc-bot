@@ -1,5 +1,7 @@
 import logging
 import os
+from telegram import Update
+from telegram.error import Conflict, NetworkError, TimedOut
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -7,7 +9,9 @@ from telegram.ext import (
     ConversationHandler,
     CallbackQueryHandler,
     PreCheckoutQueryHandler,
+    TypeHandler,
     filters,
+    ContextTypes,
 )
 
 from states import State
@@ -107,6 +111,18 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
+
+    async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        err = context.error
+        if isinstance(err, Conflict):
+            logger.warning("Conflict: another bot instance is running. Stop the duplicate.")
+            return
+        if isinstance(err, (NetworkError, TimedOut)):
+            logger.warning(f"Network issue (will retry): {err}")
+            return
+        logger.error("Unhandled exception:", exc_info=err)
+
+    app.add_error_handler(global_error_handler)
 
     logger.info("Bot ishga tushdi...")
     app.run_polling(allowed_updates=["message", "callback_query", "pre_checkout_query"])
