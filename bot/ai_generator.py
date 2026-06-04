@@ -4,8 +4,8 @@ from openai import AsyncOpenAI, APIStatusError, APIConnectionError, Authenticati
 
 logger = logging.getLogger(__name__)
 
-MODEL = "llama-3.1-70b-versatile"
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+MODEL = "gpt-4o-mini"
+GROQ_BASE_URL = "https://api.openai.com/v1"
 
 
 # ── Typed exceptions ────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ class AIConnectionError(Exception):
 # ── Client factory (lazy — bot starts even without the key set) ─────────────
 
 def _get_client() -> AsyncOpenAI:
-    api_key = os.environ.get("GROQ_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         logger.error("GROQ_API_KEY environment variable is not set!")
         raise InvalidAPIKeyError("GROQ_API_KEY is not configured")
