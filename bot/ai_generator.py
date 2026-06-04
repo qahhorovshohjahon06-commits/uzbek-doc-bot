@@ -1,7 +1,14 @@
 import os
-from openai import AsyncOpenAI
+import logging
+from openai import AsyncOpenAI, APIStatusError, APIConnectionError, AuthenticationError, RateLimitError
 
-client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+logger = logging.getLogger(__name__)
+
+_api_key = os.environ.get("OPENAI_API_KEY", "")
+if not _api_key:
+    logger.error("OPENAI_API_KEY environment variable is not set!")
+
+client = AsyncOpenAI(api_key=_api_key)
 
 PROMPTS = {
     "referat": {
@@ -68,18 +75,57 @@ PROMPTS = {
 }
 
 
+class QuotaExceededError(Exception):
+    """OpenAI account has run out of credits."""
+
+class InvalidAPIKeyError(Exception):
+    """OpenAI API key is missing or invalid."""
+
+class RateLimitedError(Exception):
+    """OpenAI rate limit hit (too many requests)."""
+
+class AIConnectionError(Exception):
+    """Network error reaching OpenAI."""
+
+
 async def generate_content(doc_type: str, topic: str, count: int) -> str:
+    if not _api_key:
+        raise InvalidAPIKeyError("OPENAI_API_KEY is not set")
+
     prompt_cfg = PROMPTS[doc_type]
     system_msg = prompt_cfg["system"]
     user_msg = prompt_cfg["user"](topic, count)
 
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ],
-        max_tokens=4000,
-        temperature=0.7,
-    )
-    return response.choices[0].message.content
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=4000,
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+
+    except AuthenticationError as e:
+        logger.error(f"OpenAI auth error: {e}")
+        raise InvalidAPIKeyError(str(e)) from e
+
+    except RateLimitError as e:
+        # 429 can mean either rate-limited or quota exceeded
+        msg = str(e).lower()
+        logger.error(f"OpenAI rate/quota error: {e}")
+        if "insufficient_quota" in msg or "exceeded your current quota" in msg:
+            raise QuotaExceededError(str(e)) from e
+        raise RateLimitedError(str(e)) from e
+
+    except APIConnectionError as e:
+        logger.error(f"OpenAI connection error: {e}")
+        raise AIConnectionError(str(e)) from e
+
+    except APIStatusError as e:
+        logger.error(f"OpenAI API error {e.status_code}: {e}")
+        if e.status_code == 429:
+            raise QuotaExceededError(str(e)) from e
+        raise
