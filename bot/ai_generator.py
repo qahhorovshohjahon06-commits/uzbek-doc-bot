@@ -4,7 +4,7 @@ from openai import AsyncOpenAI, APIStatusError, APIConnectionError, Authenticati
 
 logger = logging.getLogger(__name__)
 
-MODEL = "llama-3.1-70b-versatile"
+MODEL = "llama-3.3-70b-versatile"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 
