@@ -5,7 +5,10 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram.constants import ParseMode, ChatAction
 
 from states import State
-from ai_generator import generate_content
+from ai_generator import (
+    generate_content,
+    QuotaExceededError, InvalidAPIKeyError, RateLimitedError, AIConnectionError,
+)
 from document_builder import build_docx, build_pptx
 from database import (
     save_document, get_history, get_document,
@@ -784,10 +787,49 @@ async def enter_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                 reply_markup=MAIN_MENU_KEYBOARD,
             )
 
-    except Exception as e:
-        logger.error(f"Error generating document: {e}")
+    except QuotaExceededError:
+        logger.error("OpenAI quota exceeded — account has no credits")
         await update.message.reply_text(
-            "❌ Xatolik yuz berdi. Iltimos qayta urinib ko'ring yoki /start buyrug'ini yuboring.",
+            "⚠️ <b>AI xizmatida muammo</b>\n\n"
+            "OpenAI hisobidagi kredit tugagan. Iltimos, keyinroq urinib ko'ring.\n\n"
+            "Agar admin bo'lsangiz: <a href='https://platform.openai.com/settings/organization/billing'>openai.com/billing</a> da kreditni to'ldiring.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=MAIN_MENU_KEYBOARD,
+        )
+
+    except InvalidAPIKeyError:
+        logger.error("OpenAI API key is missing or invalid")
+        await update.message.reply_text(
+            "⚠️ <b>AI xizmatiga ulanib bo'lmadi</b>\n\n"
+            "API kalit noto'g'ri yoki o'rnatilmagan. Admin bilan bog'laning.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=MAIN_MENU_KEYBOARD,
+        )
+
+    except RateLimitedError:
+        logger.warning("OpenAI rate limit hit")
+        await update.message.reply_text(
+            "⏳ <b>So'rovlar juda ko'p</b>\n\n"
+            "Hozir AI band. Bir necha soniyadan so'ng qayta urinib ko'ring.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=MAIN_MENU_KEYBOARD,
+        )
+
+    except AIConnectionError:
+        logger.error("OpenAI connection error")
+        await update.message.reply_text(
+            "🌐 <b>Tarmoq xatosi</b>\n\n"
+            "AI serveriga ulanishda muammo. Iltimos qayta urinib ko'ring.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=MAIN_MENU_KEYBOARD,
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error generating document: {e}")
+        await update.message.reply_text(
+            "❌ <b>Kutilmagan xatolik</b>\n\n"
+            "Iltimos qayta urinib ko'ring yoki /start buyrug'ini yuboring.",
+            parse_mode=ParseMode.HTML,
             reply_markup=MAIN_MENU_KEYBOARD,
         )
 
