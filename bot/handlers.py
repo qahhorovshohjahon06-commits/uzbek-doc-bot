@@ -788,20 +788,20 @@ async def enter_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             )
 
     except QuotaExceededError:
-        logger.error("OpenAI quota exceeded — account has no credits")
+        logger.error("Groq quota exceeded or rate limited")
         await update.message.reply_text(
             "⚠️ <b>AI xizmatida muammo</b>\n\n"
-            "OpenAI hisobidagi kredit tugagan. Iltimos, keyinroq urinib ko'ring.\n\n"
-            "Agar admin bo'lsangiz: <a href='https://platform.openai.com/settings/organization/billing'>openai.com/billing</a> da kreditni to'ldiring.",
+            "Groq API limiti tugagan. Iltimos, keyinroq urinib ko'ring.\n\n"
+            "Agar admin bo'lsangiz: <a href='https://console.groq.com'>console.groq.com</a> da holatni tekshiring.",
             parse_mode=ParseMode.HTML,
             reply_markup=MAIN_MENU_KEYBOARD,
         )
 
     except InvalidAPIKeyError:
-        logger.error("OpenAI API key is missing or invalid")
+        logger.error("GROQ_API_KEY is missing or invalid")
         await update.message.reply_text(
             "⚠️ <b>AI xizmatiga ulanib bo'lmadi</b>\n\n"
-            "API kalit noto'g'ri yoki o'rnatilmagan. Admin bilan bog'laning.",
+            "GROQ_API_KEY noto'g'ri yoki o'rnatilmagan. Admin bilan bog'laning.",
             parse_mode=ParseMode.HTML,
             reply_markup=MAIN_MENU_KEYBOARD,
         )
