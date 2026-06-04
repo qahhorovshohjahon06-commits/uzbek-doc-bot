@@ -26,7 +26,7 @@ class AIConnectionError(Exception):
 # ── Client factory (lazy — bot starts even without the key set) ─────────────
 
 def _get_client() -> AsyncOpenAI:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
         logger.error("GROQ_API_KEY environment variable is not set!")
         raise InvalidAPIKeyError("GROQ_API_KEY is not configured")
